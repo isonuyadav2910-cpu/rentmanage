@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<link rel="manifest" href="manifest.webmanifest">
+<title>RentManager • 11 Rooms</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f3f6fa;color:#172033}
+header{background:#111827;color:#fff;padding:20px 18px;position:sticky;top:0;z-index:5}
+h1{margin:0 0 5px;font-size:24px}.sub{color:#cbd5e1;font-size:14px}
+.wrap{max-width:1100px;margin:auto;padding:16px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+button{border:0;border-radius:9px;padding:11px 14px;font-weight:700;cursor:pointer;background:#2563eb;color:#fff}
+button.secondary{background:#e5e7eb;color:#111827}button.green{background:#16a34a}button.red{background:#dc2626}button.dark{background:#374151}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px}
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:15px;padding:16px;box-shadow:0 2px 8px #0000000b}
+.roomhead{display:flex;justify-content:space-between;gap:8px;align-items:center}.roomtitle{font-size:21px;font-weight:800}
+.badge{padding:5px 9px;border-radius:20px;background:#e5e7eb;font-size:12px;font-weight:800}.paid{background:#dcfce7;color:#166534}.due{background:#fef3c7;color:#92400e}.overdue{background:#fee2e2;color:#991b1b}
+.row{margin:8px 0}.muted{color:#64748b}.members{margin:8px 0;padding-left:20px}.member-count{font-weight:800}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}.stat{background:#fff;padding:14px;border-radius:12px;border:1px solid #e5e7eb}.stat b{display:block;font-size:20px;margin-top:4px}
+.section{margin:22px 0}.section h2{margin:0 0 10px}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden}th,td{padding:9px;border-bottom:1px solid #e5e7eb;text-align:left;font-size:14px}
+.modal{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;padding:15px;z-index:20}.modal.open{display:flex}
+.dialog{background:#fff;border-radius:16px;width:min(650px,100%);max-height:92vh;overflow:auto;padding:18px}
+.dialog h2{margin-top:0}.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label{font-weight:700;font-size:13px;display:block;margin:8px 0}input,select,textarea{width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:8px;margin-top:5px;font:inherit}
+textarea{min-height:90px}.full{grid-column:1/-1}.memberline{display:flex;gap:7px;margin:7px 0}.memberline input{margin:0}.memberline button{padding:8px 11px}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:15px}
+.notice{background:#eff6ff;border:1px solid #bfdbfe;padding:12px;border-radius:10px;color:#1e3a8a;font-size:13px}
+
+.payment-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:12px 0}
+.payment-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px}
+.payment-box b{display:block;font-size:18px;margin-top:3px}
+.history-table{min-width:720px}
+.table-scroll{overflow:auto;border-radius:12px}
+.small-btn{padding:8px 10px;font-size:12px}
+@media(max-width:600px){.formgrid{grid-template-columns:1fr}.full{grid-column:auto}header{position:relative}.wrap{padding:12px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>🏠 RentManager • 11 Rooms</h1>
+    <div class="sub">Rent • Tenants • Members • SMS • Expenses • Balance Sheet</div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="actions">
+    <button onclick="openRoom(0)">➕ Add / Edit Room</button>
+    <button class="green" onclick="openExpense()">⚡ Add Expense</button>
+    <button class="secondary" onclick="backupData()">⬇ Backup</button>
+    <button class="secondary" onclick="document.getElementById('restoreFile').click()">⬆ Restore</button>
+    <button class="dark" id="installBtn" style="display:none" onclick="installApp()">📲 Install App</button>
+    <button class="secondary" onclick="enableAlerts()">🔔 Enable Alerts</button>
+    <input id="restoreFile" type="file" accept=".json" hidden onchange="restoreData(event)">
+  </div>
+
+  <div class="notice">💡 <b>Light bills are property expenses only.</b> They are never added to tenant rent and are not linked to any room.</div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="section">
+    <h2>🏠 Rooms</h2>
+    <div class="grid" id="rooms"></div>
+  </div>
+
+  <div class="section">
+    <h2>📊 Income & Expenses</h2>
+    <div id="accounts"></div>
+  </div>
+</main>
+
+<div class="modal" id="roomModal">
+  <div class="dialog">
+    <h2 id="roomModalTitle">Edit Room</h2>
+    <div class="formgrid">
+      <label>Room Number
+        <select id="roomNo"></select>
+      </label>
+      <label>Primary Tenant Name
+        <input id="tenant" placeholder="Tenant name">
+      </label>
+      <label>Primary Tenant Phone
+        <input id="phone" inputmode="tel" placeholder="9876543210">
+      </label>
+      <label>Monthly Rent (₹)
+        <input id="rent" type="number" min="0" placeholder="10000">
+      </label>
+      <label>Rent Due Day
+        <input id="dueDay" type="number" min="1" max="31" value="5">
+      </label>
+      <label>Rent Status
+        <select id="rentStatus">
+          <option value="due">Due</option><option value="paid">Paid</option><option value="overdue">Overdue</option>
+        </select>
+      </label>
+      <label>Check-in
+        <input id="checkin" type="date">
+      </label>
+      <label>Check-out
+        <input id="checkout" type="date">
+      </label>
+      <label>Reminder days before due
+        <input id="reminderDays" type="number" min="0" max="15" value="3">
+      </label>
+      <label>Reminder enabled
+        <select id="reminderEnabled"><option value="true">Yes</option><option value="false">No</option></select>
+      </label>
+      <div class="full">
+        <label>👥 Members / Occupants</label>
+        <div class="muted">Add every person living in this room. The primary tenant is also kept as the SMS contact.</div>
+        <div id="memberInputs"></div>
+        <button type="button" class="secondary" onclick="addMemberInput()">➕ Add Member</button>
+      </div>
+      <label class="full">Notes
+        <textarea id="notes" placeholder="Optional notes"></textarea>
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeModal('roomModal')">Cancel</button>
+      <button onclick="saveRoom()">💾 Save Room</button>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal" id="rentHistoryModal">
+  <div class="dialog">
+    <h2 id="rentHistoryTitle">Room Rent History</h2>
+    <div id="rentHistorySummary"></div>
+    <div class="actions">
+      <button class="green" onclick="openPaymentForm()">➕ Add Monthly Rent</button>
+    </div>
+    <div class="table-scroll">
+      <table class="history-table">
+        <thead><tr><th>Month</th><th>Rent</th><th>Paid Date</th><th>Mode</th><th>Status</th><th>Reference / Note</th><th>Action</th></tr></thead>
+        <tbody id="rentHistoryRows"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeModal('rentHistoryModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="paymentModal">
+  <div class="dialog">
+    <h2 id="paymentModalTitle">Add Rent Payment</h2>
+    <div class="formgrid">
+      <label>Room
+        <input id="paymentRoom" type="text" readonly>
+      </label>
+      <label>Month
+        <input id="paymentMonth" type="month">
+      </label>
+      <label>Rent Amount (₹)
+        <input id="paymentAmount" type="number" min="0" placeholder="10000">
+      </label>
+      <label>Paid Date
+        <input id="paymentDate" type="date">
+      </label>
+      <label>Payment Mode
+        <select id="paymentMode"><option value="cash">Cash</option><option value="online">Online</option></select>
+      </label>
+      <label>Status
+        <select id="paymentStatus"><option value="paid">Paid</option><option value="pending">Pending</option></select>
+      </label>
+      <label class="full">Reference / Note
+        <input id="paymentNote" placeholder="UPI reference, receipt no., or note">
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeModal('paymentModal')">Cancel</button>
+      <button class="green" onclick="savePayment()">💾 Save Payment</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="expenseModal">
+  <div class="dialog">
+    <h2>Add Property Expense</h2>
+    <div class="notice">⚡ This expense is for your balance sheet only. It is not charged to any tenant.</div>
+    <div class="formgrid">
+      <label>Date<input id="expDate" type="date"></label>
+      <label>Amount (₹)<input id="expAmount" type="number" min="0" placeholder="2500"></label>
+      <label>Category<select id="expCategory"><option>Light Bill</option><option>Maintenance</option><option>Repair</option><option>Water</option><option>Other</option></select></label>
+      <label class="full">Description<input id="expDesc" placeholder="Monthly electricity bill"></label>
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeModal('expenseModal')">Cancel</button>
+      <button class="green" onclick="saveExpense()">💾 Save Expense</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script>
+let firebaseReady=false, cloudSyncReady=false, cloudUnsubscribe=null;
+let cloudDocRef=null;
+
+function initFirebaseCloud(){
+  try{
+    if(!window.firebase || !window.FIREBASE_CONFIG || !window.FIREBASE_CONFIG.apiKey ||
+       window.FIREBASE_CONFIG.apiKey === "PASTE_API_KEY_HERE"){
+      showCloudStatus("☁️ Firebase not configured — data is saved on this device only.");
+      return;
+    }
+    firebase.initializeApp(window.FIREBASE_CONFIG);
+    const auth=firebase.auth();
+    auth.signInAnonymously().then(()=>{
+      firebaseReady=true;
+      cloudDocRef=firebase.firestore().collection("rentManager").doc("sharedData");
+      cloudSyncReady=true;
+      cloudUnsubscribe=cloudDocRef.onSnapshot((snap)=>{
+        if(snap.exists){
+          const cloud=snap.data();
+          if(cloud && Array.isArray(cloud.rooms) && cloud.rooms.length===11){
+            cloud.rooms.forEach((r,i)=>{r.room=i+1;r.members=Array.isArray(r.members)?r.members:[];});
+            cloud.expenses=Array.isArray(cloud.expenses)?cloud.expenses:[];
+            cloud.payments=Array.isArray(cloud.payments)?cloud.payments:[];
+            cloud.payments=cloud.payments.map(p=>({...p,room:Number(p.room||0),status:p.status||"paid",mode:p.mode||"cash"}));
+            data=cloud;
+            localStorage.setItem(KEY,JSON.stringify(data));
+            render();
+            showCloudStatus("☁️ Synced — data is shared across your phones.");
+          }
+        }else{
+          cloudDocRef.set(data).catch(console.error);
+          showCloudStatus("☁️ Firebase connected — first data upload complete.");
+        }
+      },(err)=>{
+        console.error(err);
+        showCloudStatus("⚠️ Firebase sync error. Check your Firestore rules.");
+      });
+    }).catch(err=>{
+      console.error(err);
+      showCloudStatus("⚠️ Firebase login failed. Enable Anonymous Authentication.");
+    });
+  }catch(e){
+    console.error(e);
+    showCloudStatus("⚠️ Firebase setup error.");
+  }
+}
+
+function showCloudStatus(msg){
+  let el=document.getElementById("cloudStatus");
+  if(!el){
+    el=document.createElement("div");
+    el.id="cloudStatus";
+    el.style.cssText="position:fixed;bottom:10px;left:10px;right:10px;z-index:50;padding:10px 14px;border-radius:10px;background:#111827;color:#fff;font-size:13px;text-align:center;box-shadow:0 2px 10px #0003";
+    document.body.appendChild(el);
+  }
+  el.textContent=msg;
+}
+
+function saveCloud(){
+  if(firebaseReady && cloudSyncReady && cloudDocRef){
+    cloudDocRef.set(data).catch(err=>{
+      console.error(err);
+      showCloudStatus("⚠️ Could not save to Firebase. Check internet/Firestore rules.");
+    });
+  }
+}
+
+<script>
+const KEY="rentmanager_11_v4";
+let data=loadData(), editingRoom=1, deferredInstall=null;
+
+function blankRoom(n){return {room:n,tenant:"",phone:"",rent:0,dueDay:5,status:"due",checkin:"",checkout:"",members:[],reminderDays:3,reminderEnabled:true,notes:""}}
+function loadData(){
+  try{
+    const x=JSON.parse(localStorage.getItem(KEY));
+    if(x && Array.isArray(x.rooms) && x.rooms.length===11){
+      x.rooms.forEach((r,i)=>{r.room=i+1;r.members=Array.isArray(r.members)?r.members:[];});
+      x.expenses=Array.isArray(x.expenses)?x.expenses:[];
+      x.payments=Array.isArray(x.payments)?x.payments:[];
+      x.payments=x.payments.map(p=>({...p,room:Number(p.room||0),status:p.status||"paid",mode:p.mode||"cash"}));
+      return x;
+    }
+  }catch(e){}
+  return {rooms:Array.from({length:11},(_,i)=>blankRoom(i+1)),expenses:[],payments:[]};
+}
+function save(){localStorage.setItem(KEY,JSON.stringify(data));render();saveCloud();}
+function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+function money(n){return "₹"+Number(n||0).toLocaleString("en-IN")}
+function today(){return new Date().toISOString().slice(0,10)}
+function monthKey(d){return String(d||today()).slice(0,7)}
+function statusLabel(s){return s==="paid"?"PAID":s==="overdue"?"OVERDUE":"DUE"}
+
+
+function paymentRecords(room){
+  return (data.payments||[]).filter(p=>Number(p.room)===Number(room));
+}
+function getRoomMonthStatus(room){
+  const key=monthKey();
+  const p=paymentRecords(room).filter(x=>x.month===key).sort((a,b)=>(b.paidDate||"").localeCompare(a.paidDate||""))[0];
+  if(!p) return "Pending";
+  if(p.status==="paid") return `Paid ${p.paidDate||""} • ${p.mode==="online"?"Online":"Cash"}`;
+  return "Pending";
+}
+function monthName(key){
+  const [y,m]=String(key).split("-");
+  return new Date(Number(y),Number(m)-1,1).toLocaleDateString("en-IN",{month:"long",year:"numeric"});
+}
+function escAttr(v){return esc(v).replace(/`/g,"&#096;")}
+
+function render(){
+  const rooms=document.getElementById("rooms");
+  rooms.innerHTML=data.rooms.map(r=>{
+    const memberNames=(r.members||[]).filter(Boolean);
+    const names=memberNames.length?memberNames:r.tenant?[r.tenant]:[];
+    return `<div class="card">
+      <div class="roomhead"><div class="roomtitle">Room ${r.room}</div><span class="badge ${r.status}">${statusLabel(r.status)}</span></div>
+      <div class="row"><b>👤 ${esc(r.tenant)||"Vacant"}</b></div>
+      <div class="row">📞 ${esc(r.phone)||"—"}</div>
+      <div class="row">💰 ${money(r.rent)} / month • Due ${r.dueDay}th</div>
+      <div class="row muted">📅 Current month: ${getRoomMonthStatus(r.room)}</div>
+      <div class="row">👥 <span class="member-count">${names.length} member${names.length===1?"":"s"}</span></div>
+      ${names.length?`<ol class="members">${names.map(n=>`<li>${esc(n)}</li>`).join("")}</ol>`:""}
+      <div class="row muted">Check-in: ${esc(r.checkin)||"—"} • Check-out: ${esc(r.checkout)||"—"}</div>
+      <div class="actions">
+        <button onclick="openRoom(${r.room})">✏️ Edit</button>
+        <button class="dark" onclick="openRentHistory(${r.room})">💰 Rent History</button>
+        <button class="secondary" onclick="rentSMS(${r.room},false)">📱 Rent Reminder</button>
+        <button class="green" onclick="rentSMS(${r.room},true)">✅ Paid SMS</button>
+      </div>
+    </div>`;
+  }).join("");
+
+  const income=data.rooms.filter(r=>r.status==="paid").reduce((s,r)=>s+Number(r.rent||0),0);
+  const expenses=data.expenses.reduce((s,e)=>s+Number(e.amount||0),0);
+  document.getElementById("stats").innerHTML=`
+    <div class="stat">🏠 Occupied <b>${data.rooms.filter(r=>r.tenant).length}/11</b></div>
+    <div class="stat">💰 Rent Paid <b>${money(income)}</b></div>
+    <div class="stat">⚠️ Rent Due <b>${money(data.rooms.filter(r=>r.status!=="paid").reduce((s,r)=>s+Number(r.rent||0),0))}</b></div>
+    <div class="stat">💸 Expenses <b>${money(expenses)}</b></div>
+    <div class="stat">💵 Net Balance <b>${money(income-expenses)}</b></div>`;
+  document.getElementById("accounts").innerHTML=`
+    <div class="card">
+      <p><b>Income:</b> Rent received = ${money(income)}</p>
+      <p><b>Expenses:</b> ${money(expenses)}</p>
+      <p><b>Net Balance:</b> ${money(income-expenses)}</p>
+      ${data.expenses.length?`<table><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th></tr>${data.expenses.slice().reverse().map((e,i)=>`<tr><td>${esc(e.date)}</td><td>${esc(e.category)}</td><td>${esc(e.description)}</td><td>${money(e.amount)}</td></tr>`).join("")}</table>`:"<p class='muted'>No expenses entered yet.</p>"}
+    </div>`;
+}
+
+function openRoom(n){
+  editingRoom=n;
+  const r=data.rooms[n-1];
+  document.getElementById("roomNo").innerHTML=data.rooms.map(x=>`<option value="${x.room}">Room ${x.room}</option>`).join("");
+  document.getElementById("roomNo").value=n;
+  document.getElementById("roomModalTitle").textContent=`Edit Room ${n}`;
+  document.getElementById("tenant").value=r.tenant||"";
+  document.getElementById("phone").value=r.phone||"";
+  document.getElementById("rent").value=r.rent||"";
+  document.getElementById("dueDay").value=r.dueDay||5;
+  document.getElementById("rentStatus").value=r.status||"due";
+  document.getElementById("checkin").value=r.checkin||"";
+  document.getElementById("checkout").value=r.checkout||"";
+  document.getElementById("reminderDays").value=r.reminderDays??3;
+  document.getElementById("reminderEnabled").value=String(r.reminderEnabled!==false);
+  document.getElementById("notes").value=r.notes||"";
+  const members=(r.members&&r.members.length)?r.members:[r.tenant||""];
+  document.getElementById("memberInputs").innerHTML="";
+  members.forEach(m=>addMemberInput(m));
+  document.getElementById("roomModal").classList.add("open");
+}
+function addMemberInput(value=""){
+  const wrap=document.createElement("div");wrap.className="memberline";
+  wrap.innerHTML=`<input class="memberName" placeholder="Member name" value="${esc(value)}"><button type="button" class="red" onclick="this.parentElement.remove()">Remove</button>`;
+  document.getElementById("memberInputs").appendChild(wrap);
+}
+function saveRoom(){
+  const n=Number(document.getElementById("roomNo").value),r=data.rooms[n-1];
+  editingRoom=n;
+  r.tenant=document.getElementById("tenant").value.trim();
+  r.phone=document.getElementById("phone").value.trim();
+  r.rent=Number(document.getElementById("rent").value||0);
+  r.dueDay=Math.min(31,Math.max(1,Number(document.getElementById("dueDay").value||5)));
+  r.status=document.getElementById("rentStatus").value;
+  r.checkin=document.getElementById("checkin").value;
+  r.checkout=document.getElementById("checkout").value;
+  r.reminderDays=Math.min(15,Math.max(0,Number(document.getElementById("reminderDays").value||3)));
+  r.reminderEnabled=document.getElementById("reminderEnabled").value==="true";
+  r.members=[...document.querySelectorAll(".memberName")].map(x=>x.value.trim()).filter(Boolean);
+  if(r.tenant && !r.members.includes(r.tenant)) r.members.unshift(r.tenant);
+  r.notes=document.getElementById("notes").value.trim();
+  closeModal("roomModal");save();alert(`Room ${n} saved.`);
+}
+
+let historyRoom=1, editingPaymentId=null;
+
+function openRentHistory(room){
+  historyRoom=Number(room);
+  document.getElementById("rentHistoryTitle").textContent=`💰 Room ${historyRoom} • Monthly Rent History`;
+  renderRentHistory();
+  document.getElementById("rentHistoryModal").classList.add("open");
+}
+function renderRentHistory(){
+  const r=data.rooms[historyRoom-1];
+  const records=paymentRecords(historyRoom).slice().sort((a,b)=>String(b.month).localeCompare(String(a.month)));
+  const paid=records.filter(p=>p.status==="paid").reduce((s,p)=>s+Number(p.amount||0),0);
+  const pending=records.filter(p=>p.status!=="paid").reduce((s,p)=>s+Number(p.amount||0),0);
+  document.getElementById("rentHistorySummary").innerHTML=`
+    <div class="payment-summary">
+      <div class="payment-box">Monthly Rent<b>${money(r.rent)}</b></div>
+      <div class="payment-box">Total Paid<b>${money(paid)}</b></div>
+      <div class="payment-box">Total Pending<b>${money(pending)}</b></div>
+      <div class="payment-box">Payments<b>${records.length}</b></div>
+    </div>`;
+  document.getElementById("rentHistoryRows").innerHTML=records.length?records.map(p=>`
+    <tr>
+      <td><b>${esc(monthName(p.month))}</b></td>
+      <td>${money(p.amount)}</td>
+      <td>${esc(p.paidDate)||"—"}</td>
+      <td>${p.mode==="online"?"📱 Online":"💵 Cash"}</td>
+      <td><span class="badge ${p.status==="paid"?"paid":"due"}">${p.status==="paid"?"PAID":"PENDING"}</span></td>
+      <td>${esc(p.note)||"—"}</td>
+      <td><button class="small-btn" onclick="editPayment('${escAttr(p.id)}')">✏️ Edit</button></td>
+    </tr>`).join(""):`<tr><td colspan="7" class="muted">No monthly rent records yet. Add the first payment.</td></tr>`;
+}
+function openPaymentForm(payment=null){
+  editingPaymentId=payment?payment.id:null;
+  const r=data.rooms[historyRoom-1];
+  document.getElementById("paymentModalTitle").textContent=payment?"✏️ Edit Rent Payment":"➕ Add Rent Payment";
+  document.getElementById("paymentRoom").value=`Room ${historyRoom}`;
+  document.getElementById("paymentMonth").value=payment?.month||monthKey();
+  document.getElementById("paymentAmount").value=payment?.amount??r.rent??"";
+  document.getElementById("paymentDate").value=payment?.paidDate||(payment?.status==="pending"?"":today());
+  document.getElementById("paymentMode").value=payment?.mode||"cash";
+  document.getElementById("paymentStatus").value=payment?.status||"paid";
+  document.getElementById("paymentNote").value=payment?.note||"";
+  document.getElementById("paymentModal").classList.add("open");
+}
+function editPayment(id){
+  const p=(data.payments||[]).find(x=>String(x.id)===String(id));
+  if(p) openPaymentForm(p);
+}
+function savePayment(){
+  const month=document.getElementById("paymentMonth").value;
+  const amount=Number(document.getElementById("paymentAmount").value||0);
+  const status=document.getElementById("paymentStatus").value;
+  if(!month){alert("Please select the rent month.");return}
+  if(amount<=0){alert("Please enter the rent amount.");return}
+  if(status==="paid" && !document.getElementById("paymentDate").value){alert("Please enter the paid date.");return}
+  const record={
+    id:editingPaymentId||("p_"+Date.now()+"_"+Math.random().toString(36).slice(2,7)),
+    room:historyRoom,month,amount,
+    paidDate:document.getElementById("paymentDate").value,
+    mode:document.getElementById("paymentMode").value,
+    status,note:document.getElementById("paymentNote").value.trim()
+  };
+  if(editingPaymentId){
+    const i=data.payments.findIndex(p=>String(p.id)===String(editingPaymentId));
+    if(i>=0)data.payments[i]=record;
+  }else{
+    // Keep one record per room per month; editing an existing month updates it.
+    const existing=data.payments.findIndex(p=>Number(p.room)===historyRoom&&p.month===month);
+    if(existing>=0)data.payments[existing]=record; else data.payments.push(record);
+  }
+  if(record.month===monthKey()){
+    const rr=data.rooms[historyRoom-1];
+    rr.status=record.status==="paid"?"paid":"due";
+  }
+  closeModal("paymentModal");
+  save();
+  renderRentHistory();
+  document.getElementById("rentHistoryModal").classList.add("open");
+}
+function openExpense(){
+  document.getElementById("expDate").value=today();
+  document.getElementById("expAmount").value="";
+  document.getElementById("expCategory").value="Light Bill";
+  document.getElementById("expDesc").value="";
+  document.getElementById("expenseModal").classList.add("open");
+}
+function saveExpense(){
+  const amount=Number(document.getElementById("expAmount").value||0);
+  if(amount<=0){alert("Enter an expense amount.");return}
+  data.expenses.push({date:document.getElementById("expDate").value||today(),amount,category:document.getElementById("expCategory").value,description:document.getElementById("expDesc").value.trim()});
+  closeModal("expenseModal");save();alert("Expense saved to your balance sheet.");
+}
+function closeModal(id){document.getElementById(id).classList.remove("open")}
+function rentSMS(n,paid){
+  const r=data.rooms[n-1];
+  if(!r.phone){alert("Please add the primary tenant phone number first.");return}
+  const msg=paid
+    ?`Dear ${r.tenant||"Tenant"}, your rent payment of ${money(r.rent)} for Room ${r.room} has been received. Thank you.`
+    :`Dear ${r.tenant||"Tenant"}, this is a reminder that your monthly rent of ${money(r.rent)} for Room ${r.room} is due on the ${r.dueDay}th. Please make the payment on time. Thank you.`;
+  window.location.href="sms:"+r.phone+"?body="+encodeURIComponent(msg);
+}
+function backupData(){
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="rentmanager-backup.json";a.click();URL.revokeObjectURL(a.href);
+}
+function restoreData(ev){
+  const f=ev.target.files[0];if(!f)return;
+  const reader=new FileReader();reader.onload=()=>{try{const x=JSON.parse(reader.result);if(!x.rooms||x.rooms.length!==11)throw Error();x.payments=Array.isArray(x.payments)?x.payments:[];x.payments=x.payments.map(p=>({...p,room:Number(p.room||0),status:p.status||"paid",mode:p.mode||"cash"}));data=x;save();alert("Backup restored.");}catch(e){alert("Invalid backup file.")}};reader.readAsText(f);ev.target.value="";
+}
+async function enableAlerts(){
+  if(!("Notification" in window)){alert("Browser notifications are not supported here.");return}
+  const p=await Notification.requestPermission();alert(p==="granted"?"Alerts enabled.":"Notifications were not enabled.");
+}
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredInstall=e;document.getElementById("installBtn").style.display="inline-block"});
+async function installApp(){if(deferredInstall){deferredInstall.prompt();deferredInstall=null}else alert("Use Chrome/Edge menu → Install app / Add to Home screen.")}
+if("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(console.error));
+render();
+showCloudStatus("⏳ Connecting to Firebase…");
+initFirebaseCloud();
+</script>
+</body>
+</html>
